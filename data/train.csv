@@ -1,0 +1,6 @@
+text,label
+"LOCK tx=0xA to=Alice amount=100; DEPOSIT tx=0xB ref_lock=0xA; PARSE id=p1 ref_deposit=0xB; AUTHORIZE id=au1 ref_parse=p1; UNLOCK tx=0xC to=Alice amount=100 ref_auth=au1",0
+"SRC tx=0xS1 to=Bob amount=500 ts=1000; RELAY src_tx=0xS1; AUTH src_tx=0xS1; DST src_tx=0xS1 to=Bob amount=500 ts=1100; GAS price=50 limit=120000 used=60000",0
+"LOCK tx=0xL2 to=Carol amount=700; DEPOSIT tx=0xD2 ref_lock=0xL2; PARSE id=p2 ref_deposit=0xD2; AUTHORIZE id=au2 ref_parse=p2; UNLOCK tx=0xU2 to=Mallory amount=700 ref_auth=au2",1
+"SRC tx=0xS3 to=Eve amount=420 ts=2000; RELAY src_tx=0xS3; AUTH src_tx=0xS3; DST src_tx=0xS3 to=Mallory amount=420 ts=2100; GAS price=20 limit=90000 used=45000",1
+"LOCK tx=0xL3 to=Zoe amount=200; DEPOSIT tx=0xD3 ref_lock=0xL3; PARSE id=p3 ref_deposit=0xD3; AUTHORIZE id=au3 ref_parse=p3; UNLOCK tx=0xU3 to=Zoe amount=200 ref_auth=au3",0

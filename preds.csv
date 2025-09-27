@@ -1,0 +1,3 @@
+text,label,pred,prob_abnormal
+LOCK tx=0xL4 to=Dave amount=100; DEPOSIT tx=0xD4 ref_lock=0xL4; PARSE id=p4 ref_deposit=0xD4; AUTHORIZE id=au4 ref_parse=p4; UNLOCK tx=0xU4 to=Dave amount=90 ref_auth=au4,1,0,0.45155337
+SRC tx=0xS5 to=Alice amount=300 ts=3000; RELAY src_tx=0xS5; AUTH src_tx=0xS5; DST src_tx=0xS5 to=Alice amount=300 ts=3100; GAS price=30 limit=100000 used=70000,0,0,0.45251518

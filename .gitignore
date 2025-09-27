@@ -1,0 +1,3 @@
+# 忽略所有模型文件
+/models/
+/models/bert_binary/
