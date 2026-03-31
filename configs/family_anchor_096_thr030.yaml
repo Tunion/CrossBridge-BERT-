@@ -1,0 +1,20 @@
+run_family_anchor_args:
+  seed: 42
+  device: cpu
+  dual_model: outputs/models/dual_view.pt
+  dual_input: data/slices/dual_views.jsonl
+  embedding_npz: outputs/results/dual_view_embeddings.npz
+  embedding_key: z_joint
+  label_csv: processed/label_standard_local.csv
+  manual_root: manually-labeled dataset/Real_attack_dataset_format
+  scope: label-files
+  energy_mode: proto_hybrid
+  energy_loss_mode: proto_margin
+  energy_stable_train: true
+  energy_family_aware_anchor: true
+  energy_anchor_family_min_samples: 96
+  energy_anchor_metamorphic_enable: false
+  energy_anchor_metamorphic_weight: 0.12
+  energy_include_metamorphic_features: true
+  triage_gray_threshold: 0.30
+  out_tag: familyanchor96_seed42_thr030

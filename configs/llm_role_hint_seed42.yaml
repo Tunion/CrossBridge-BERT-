@@ -1,0 +1,15 @@
+run_llm_role_hint_args:
+  out_tag: llmrole_seed42
+  seed: 42
+  device: cpu
+  train_list: processed/dataset_non_overlap_curated_standard.txt
+  max_files: 0
+  max_slices: 20000
+  epochs_dual: 4
+  manual_root: manually-labeled dataset/Real_attack_dataset_format
+  label_csv: processed/label_standard_local.csv
+  manual_scope: label-files
+  llm_role_hints: outputs/results/llm_role_hints.jsonl
+  llm_role_low_confidence_max: 0.60
+  llm_role_min_prob: 0.72
+  llm_role_weight: 0.45

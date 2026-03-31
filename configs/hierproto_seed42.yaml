@@ -1,0 +1,21 @@
+run_hierproto_args:
+  seed: 42
+  dual_model: outputs/models/dual_view.pt
+  dual_input: data/slices/dual_views.jsonl
+  embedding_npz: outputs/results/dual_view_embeddings.npz
+  embedding_key: z_joint
+  label_csv: processed/label_standard_local.csv
+  manual_root: manually-labeled dataset/Real_attack_dataset_format
+  scope: label-files
+  energy_mode: proto_hybrid
+  energy_loss_mode: proto_margin
+  energy_stable_train: true
+  energy_family_aware_anchor: false
+  energy_anchor_family_min_samples: 96
+  hier_prototype_local_k: 4
+  hier_prototype_family_min_samples: 96
+  hier_prototype_shrinkage_tau: 96.0
+  hier_prototype_global_mix_floor: 0.25
+  hier_prototype_match_conf_floor: 0.25
+  triage_gray_threshold: 0.28
+  out_tag: hierproto_seed42

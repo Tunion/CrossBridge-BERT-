@@ -1,0 +1,20 @@
+﻿run_protofree_famgray_args:
+  seed: 42
+  dual_model: outputs/models/dual_view.pt
+  dual_input: data/slices/dual_views.jsonl
+  embedding_npz: outputs/results/dual_view_embeddings.npz
+  embedding_key: z_joint
+  label_csv: processed/label_standard_local.csv
+  manual_root: manually-labeled dataset/Real_attack_dataset_format
+  scope: label-files
+  energy_mode: proto_free_energy
+  energy_loss_mode: proto_margin
+  energy_free_energy_temp: 0.35
+  energy_free_energy_prior: uniform
+  energy_stable_train: true
+  energy_family_aware_anchor: false
+  energy_anchor_family_min_samples: 96
+  triage_gray_threshold: 0.28
+  triage_family_aware_gray: true
+  triage_family_min_samples: 32
+  out_tag: protofree_gap_seed42_thr028

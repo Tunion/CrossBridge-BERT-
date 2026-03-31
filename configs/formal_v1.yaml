@@ -1,0 +1,49 @@
+run_pipeline_args:
+  seed: 42
+  device: cpu
+  max_files: 0
+  max_slices: 20000
+  epochs_dual: 4
+  hidden_dim: 64
+  num_layers: 2
+  prototype_k: 8
+
+  train_list: processed/dataset_non_overlap_local.txt
+  build_curated_standard: true
+  curated_output_list: processed/dataset_non_overlap_curated_standard.txt
+  curated_output_report: processed/dataset_non_overlap_curated_standard_report.json
+  curated_max_per_bridge: 120
+  curated_target_size: 2500
+  curated_drop_common_libs: true
+  curated_exclude_bridges: __NONE__
+
+  run_manual_eval: true
+  manual_scope: label-files
+
+  slice_formal_propagation: true
+  slice_include_contains: true
+  dual_skeleton_mode: formal
+
+  manual_slice_formal_propagation: true
+  manual_slice_include_contains: false
+  manual_dual_skeleton_mode: legacy
+
+  unsup_family_aware_weight: 0.30
+  manual_family_aware_weight: 0.30
+
+  manual_score_head_method: iforest
+  manual_score_head_fit_scope: low_risk
+  manual_binary_head_method: ocsvm
+  manual_binary_head_fit_scope: all
+  manual_binary_head_contamination: 0.08
+  manual_triage_low_quantile: 0.0
+  manual_triage_high_quantile: 0.90
+  manual_triage_gray_threshold: 0.5130835772
+
+  manual_line_risk_closure_boost: 0.30
+  manual_line_risk_stage2_weight: 0.15
+  manual_line_risk_stage2_top_functions: 640
+  manual_line_risk_stage2_support_weight: 0.60
+  manual_line_risk_stage2_max_file_share: 0.0
+
+  summary_out: outputs/results/formal_pipeline_summary_full.json
