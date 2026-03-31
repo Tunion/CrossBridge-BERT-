@@ -1729,6 +1729,9 @@ def apply_mechanism_head_score(
         row["mechanism_head_margin_sig"] = float(mrow.get("margin_sig", 0.0))
         row["mechanism_head_corroboration"] = float(mrow.get("corroboration", 0.0))
         row["mechanism_head_corroboration_factor"] = float(mrow.get("corroboration_factor", 0.0))
+        row["mechanism_head_utility_surface"] = float(mrow.get("utility_surface", 0.0))
+        row["mechanism_head_utility_corr"] = float(mrow.get("utility_corr", 0.0))
+        row["mechanism_head_utility_discount"] = float(mrow.get("utility_discount", 0.0))
         row["mechanism_head_threshold"] = float(getattr(model, "slice_threshold", 0.5))
     diag = {
         "enabled": True,
@@ -1741,6 +1744,9 @@ def apply_mechanism_head_score(
         "corroboration_alpha": float(getattr(model, "corroboration_alpha", 0.40)),
         "corroboration_vp_weight": float(getattr(model, "corroboration_vp_weight", 0.80)),
         "corroboration_margin_weight": float(getattr(model, "corroboration_margin_weight", 0.20)),
+        "utility_floor": float(getattr(model, "utility_floor", 0.60)),
+        "utility_vp_weight": float(getattr(model, "utility_vp_weight", 0.40)),
+        "utility_margin_weight": float(getattr(model, "utility_margin_weight", 0.60)),
         "score_mean": float(np.mean(score)) if len(score) else 0.0,
         "score_std": float(np.std(score)) if len(score) else 0.0,
         "train_summary": dict(getattr(model, "train_summary", {}) or {}),
@@ -3897,6 +3903,9 @@ def main() -> None:
             "mechanism_head_margin_sig",
             "mechanism_head_corroboration",
             "mechanism_head_corroboration_factor",
+            "mechanism_head_utility_surface",
+            "mechanism_head_utility_corr",
+            "mechanism_head_utility_discount",
             "mechanism_head_threshold",
             "final_risk",
             "status",
@@ -4110,6 +4119,9 @@ def main() -> None:
                 "mechanism_head_margin_sig",
                 "mechanism_head_corroboration",
                 "mechanism_head_corroboration_factor",
+                "mechanism_head_utility_surface",
+                "mechanism_head_utility_corr",
+                "mechanism_head_utility_discount",
                 "mechanism_head_threshold",
                 "proto_resp_entropy",
                 "proto_resp_max",
@@ -4153,6 +4165,9 @@ def main() -> None:
                     "mechanism_head_margin_sig": float(row.get("mechanism_head_margin_sig", 0.0)),
                     "mechanism_head_corroboration": float(row.get("mechanism_head_corroboration", 0.0)),
                     "mechanism_head_corroboration_factor": float(row.get("mechanism_head_corroboration_factor", 0.0)),
+                    "mechanism_head_utility_surface": float(row.get("mechanism_head_utility_surface", 0.0)),
+                    "mechanism_head_utility_corr": float(row.get("mechanism_head_utility_corr", 0.0)),
+                    "mechanism_head_utility_discount": float(row.get("mechanism_head_utility_discount", 0.0)),
                     "mechanism_head_threshold": float(row.get("mechanism_head_threshold", 0.0)),
                     "proto_resp_entropy": float(row.get("proto_resp_entropy", 0.0)),
                     "proto_resp_max": float(row.get("proto_resp_max", 0.0)),

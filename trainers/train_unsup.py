@@ -2468,6 +2468,9 @@ def main() -> None:
             row["mechanism_head_margin_sig"] = float(mrow.get("margin_sig", 0.0))
             row["mechanism_head_corroboration"] = float(mrow.get("corroboration", 0.0))
             row["mechanism_head_corroboration_factor"] = float(mrow.get("corroboration_factor", 0.0))
+            row["mechanism_head_utility_surface"] = float(mrow.get("utility_surface", 0.0))
+            row["mechanism_head_utility_corr"] = float(mrow.get("utility_corr", 0.0))
+            row["mechanism_head_utility_discount"] = float(mrow.get("utility_discount", 0.0))
             row["mechanism_head_threshold"] = float(mechanism_model.slice_threshold)
             if bool(getattr(args, "mechanism_head_override_final_risk", False)):
                 row["legacy_final_risk"] = float(row.get("final_risk", 0.0))
@@ -2482,6 +2485,9 @@ def main() -> None:
             "corroboration_alpha": float(getattr(mechanism_model, "corroboration_alpha", 0.40)),
             "corroboration_vp_weight": float(getattr(mechanism_model, "corroboration_vp_weight", 0.80)),
             "corroboration_margin_weight": float(getattr(mechanism_model, "corroboration_margin_weight", 0.20)),
+            "utility_floor": float(getattr(mechanism_model, "utility_floor", 0.60)),
+            "utility_vp_weight": float(getattr(mechanism_model, "utility_vp_weight", 0.40)),
+            "utility_margin_weight": float(getattr(mechanism_model, "utility_margin_weight", 0.60)),
             "score_mean": float(np.mean(mechanism_head_score)) if len(mechanism_head_score) else 0.0,
             "score_std": float(np.std(mechanism_head_score)) if len(mechanism_head_score) else 0.0,
             **dict(mechanism_model.train_summary),
@@ -2582,6 +2588,9 @@ def main() -> None:
                 "mechanism_head_margin_sig",
                 "mechanism_head_corroboration",
                 "mechanism_head_corroboration_factor",
+                "mechanism_head_utility_surface",
+                "mechanism_head_utility_corr",
+                "mechanism_head_utility_discount",
                 "mechanism_head_threshold",
                 "energy_head_score",
                 "gmm_head_score",

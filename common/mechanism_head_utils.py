@@ -54,6 +54,26 @@ BRIDGE_KEYWORDS: Tuple[str, ...] = (
     "sig",
 )
 
+UTILITY_FILE_PATTERNS: Tuple[str, ...] = (
+    "utils",
+    "erc20",
+    "token",
+    "fusd",
+)
+
+UTILITY_FUNCTION_KEYWORDS: Tuple[str, ...] = (
+    "safeapprove",
+    "safetransfer",
+    "allowance",
+    "getamountin",
+    "getamountout",
+    "getreserves",
+    "quote",
+    "calculateswap",
+    "addliquidity",
+    "removeliquidity",
+)
+
 MECHANISM_HEAD_FEATURE_NAMES: Tuple[str, ...] = (
     "full_node_count_log",
     "full_edge_count_log",
@@ -135,6 +155,15 @@ def _keyword_hits(texts: Iterable[str]) -> int:
         if re.search(rf"\b{re.escape(kw)}\b", joined):
             hits += 1
     return hits
+
+
+def _utility_surface_score(file_path: str, function_names: str) -> float:
+    base = Path(str(file_path or "")).name.lower()
+    fn_text = str(function_names or "").replace("|", " ").lower()
+    file_flag = 1.0 if any(token in base for token in UTILITY_FILE_PATTERNS) else 0.0
+    fn_hits = sum(1 for token in UTILITY_FUNCTION_KEYWORDS if token in fn_text)
+    fn_score = min(1.0, _safe_ratio(float(fn_hits), 3.0, default=0.0))
+    return float(min(1.0, 0.75 * file_flag + 0.25 * fn_score))
 
 
 def _line_candidates_from_graph(graph: Dict[str, Any]) -> List[int]:
@@ -394,6 +423,9 @@ class MechanismSliceHeadModel:
     corroboration_alpha: float = 0.40
     corroboration_vp_weight: float = 0.80
     corroboration_margin_weight: float = 0.20
+    utility_floor: float = 0.60
+    utility_vp_weight: float = 0.40
+    utility_margin_weight: float = 0.60
     feature_names: List[str] = field(default_factory=lambda: list(MECHANISM_HEAD_FEATURE_NAMES))
     feature_index: Dict[str, int] = field(default_factory=dict)
     scaler: RobustScaler | None = None
@@ -637,8 +669,30 @@ class MechanismSliceHeadModel:
             + (1.0 - float(min(1.0, max(0.0, self.corroboration_alpha)))) * corroboration
         )
 
+        utility_surface = np.asarray(
+            [
+                _utility_surface_score(
+                    str(row.get("file", row.get("relative_source_path", ""))),
+                    str(row.get("function_names", "")),
+                )
+                for row in feature_rows
+            ],
+            dtype=np.float32,
+        )
+        util_vp_w = float(min(1.0, max(0.0, self.utility_vp_weight)))
+        util_margin_w = float(min(1.0, max(0.0, self.utility_margin_weight)))
+        util_weight_sum = max(1e-6, util_vp_w + util_margin_w)
+        utility_corr = np.clip((util_vp_w * vp_evidence + util_margin_w * margin_sig) / util_weight_sum, 0.0, 1.0).astype(np.float32)
+        utility_discount = (
+            1.0
+            - utility_surface
+            * (1.0 - float(min(1.0, max(0.0, self.utility_floor))))
+            * (1.0 - utility_corr)
+        ).astype(np.float32)
+        utility_discount = np.clip(utility_discount, float(min(1.0, max(0.0, self.utility_floor))), 1.0).astype(np.float32)
+
         raw_score = 0.25 * residual_norm + 0.15 * if_norm + 0.20 * closure_norm + 0.40 * mechanism_norm
-        scaled_score = (0.10 + 0.90 * bridge_gate) * helper_discount * corroboration_factor * raw_score
+        scaled_score = (0.10 + 0.90 * bridge_gate) * helper_discount * corroboration_factor * utility_discount * raw_score
         anomaly_score = (1.0 - np.exp(-np.clip(scaled_score, 0.0, 6.0))).astype(np.float32)
 
         out: List[Dict[str, Any]] = []
@@ -660,6 +714,9 @@ class MechanismSliceHeadModel:
                     "margin_sig": float(margin_sig[idx]),
                     "corroboration": float(corroboration[idx]),
                     "corroboration_factor": float(corroboration_factor[idx]),
+                    "utility_surface": float(utility_surface[idx]),
+                    "utility_corr": float(utility_corr[idx]),
+                    "utility_discount": float(utility_discount[idx]),
                     "anomaly_score": float(anomaly_score[idx]),
                     "slice_pred": int(float(anomaly_score[idx]) >= float(self.slice_threshold)),
                 }
@@ -688,4 +745,10 @@ def load_mechanism_head_model(path: str | Path) -> MechanismSliceHeadModel:
         model.corroboration_vp_weight = 0.80
     if not hasattr(model, "corroboration_margin_weight"):
         model.corroboration_margin_weight = 0.20
+    if not hasattr(model, "utility_floor"):
+        model.utility_floor = 0.60
+    if not hasattr(model, "utility_vp_weight"):
+        model.utility_vp_weight = 0.40
+    if not hasattr(model, "utility_margin_weight"):
+        model.utility_margin_weight = 0.60
     return model
