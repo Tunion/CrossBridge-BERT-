@@ -1732,6 +1732,10 @@ def apply_mechanism_head_score(
         row["mechanism_head_utility_surface"] = float(mrow.get("utility_surface", 0.0))
         row["mechanism_head_utility_corr"] = float(mrow.get("utility_corr", 0.0))
         row["mechanism_head_utility_discount"] = float(mrow.get("utility_discount", 0.0))
+        row["mechanism_head_routine_bridge_surface"] = float(mrow.get("routine_bridge_surface", 0.0))
+        row["mechanism_head_routine_bridge_discount"] = float(mrow.get("routine_bridge_discount", 1.0))
+        row["mechanism_head_compat_wrapper_surface"] = float(mrow.get("compat_wrapper_surface", 0.0))
+        row["mechanism_head_compat_wrapper_discount"] = float(mrow.get("compat_wrapper_discount", 1.0))
         row["mechanism_head_threshold"] = float(getattr(model, "slice_threshold", 0.5))
     diag = {
         "enabled": True,
@@ -1747,6 +1751,15 @@ def apply_mechanism_head_score(
         "utility_floor": float(getattr(model, "utility_floor", 0.60)),
         "utility_vp_weight": float(getattr(model, "utility_vp_weight", 0.40)),
         "utility_margin_weight": float(getattr(model, "utility_margin_weight", 0.60)),
+        "routine_bridge_scale": float(getattr(model, "routine_bridge_scale", 0.55)),
+        "routine_bridge_min_surface": float(getattr(model, "routine_bridge_min_surface", 0.60)),
+        "routine_bridge_max_vp": float(getattr(model, "routine_bridge_max_vp", 0.18)),
+        "routine_bridge_min_gate": float(getattr(model, "routine_bridge_min_gate", 0.70)),
+        "routine_bridge_max_utility": float(getattr(model, "routine_bridge_max_utility", 0.25)),
+        "compat_wrapper_scale": float(getattr(model, "compat_wrapper_scale", 0.60)),
+        "compat_wrapper_min_surface": float(getattr(model, "compat_wrapper_min_surface", 0.70)),
+        "compat_wrapper_max_vp": float(getattr(model, "compat_wrapper_max_vp", 0.18)),
+        "compat_wrapper_min_utility": float(getattr(model, "compat_wrapper_min_utility", 0.75)),
         "score_mean": float(np.mean(score)) if len(score) else 0.0,
         "score_std": float(np.std(score)) if len(score) else 0.0,
         "train_summary": dict(getattr(model, "train_summary", {}) or {}),
@@ -3906,6 +3919,10 @@ def main() -> None:
             "mechanism_head_utility_surface",
             "mechanism_head_utility_corr",
             "mechanism_head_utility_discount",
+            "mechanism_head_routine_bridge_surface",
+            "mechanism_head_routine_bridge_discount",
+            "mechanism_head_compat_wrapper_surface",
+            "mechanism_head_compat_wrapper_discount",
             "mechanism_head_threshold",
             "final_risk",
             "status",
@@ -4122,6 +4139,10 @@ def main() -> None:
                 "mechanism_head_utility_surface",
                 "mechanism_head_utility_corr",
                 "mechanism_head_utility_discount",
+                "mechanism_head_routine_bridge_surface",
+                "mechanism_head_routine_bridge_discount",
+                "mechanism_head_compat_wrapper_surface",
+                "mechanism_head_compat_wrapper_discount",
                 "mechanism_head_threshold",
                 "proto_resp_entropy",
                 "proto_resp_max",
@@ -4168,6 +4189,10 @@ def main() -> None:
                     "mechanism_head_utility_surface": float(row.get("mechanism_head_utility_surface", 0.0)),
                     "mechanism_head_utility_corr": float(row.get("mechanism_head_utility_corr", 0.0)),
                     "mechanism_head_utility_discount": float(row.get("mechanism_head_utility_discount", 0.0)),
+                    "mechanism_head_routine_bridge_surface": float(row.get("mechanism_head_routine_bridge_surface", 0.0)),
+                    "mechanism_head_routine_bridge_discount": float(row.get("mechanism_head_routine_bridge_discount", 1.0)),
+                    "mechanism_head_compat_wrapper_surface": float(row.get("mechanism_head_compat_wrapper_surface", 0.0)),
+                    "mechanism_head_compat_wrapper_discount": float(row.get("mechanism_head_compat_wrapper_discount", 1.0)),
                     "mechanism_head_threshold": float(row.get("mechanism_head_threshold", 0.0)),
                     "proto_resp_entropy": float(row.get("proto_resp_entropy", 0.0)),
                     "proto_resp_max": float(row.get("proto_resp_max", 0.0)),

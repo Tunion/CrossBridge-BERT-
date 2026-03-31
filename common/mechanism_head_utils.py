@@ -74,6 +74,58 @@ UTILITY_FUNCTION_KEYWORDS: Tuple[str, ...] = (
     "removeliquidity",
 )
 
+ROUTINE_BRIDGE_KEYWORDS: Tuple[str, ...] = (
+    "deposit",
+    "withdraw",
+    "redeem",
+    "mint",
+    "burn",
+    "swapin",
+    "swapout",
+    "fees",
+    "gasamount",
+)
+
+ROUTINE_BRIDGE_AUTH_KEYWORDS: Tuple[str, ...] = (
+    "verify",
+    "proof",
+    "sig",
+    "keeper",
+    "header",
+    "proposal",
+    "execute",
+    "bookkeeper",
+    "permit",
+    "owner",
+    "admin",
+    "approve",
+)
+
+COMPAT_WRAPPER_FILE_PATTERNS: Tuple[str, ...] = (
+    "erc20v3compat",
+)
+
+COMPAT_WRAPPER_KEYWORDS: Tuple[str, ...] = (
+    "approve",
+    "safeapprove",
+    "approveandcall",
+    "permit",
+    "ontokentransfer",
+    "verifyeip712",
+    "verifypersonalsign",
+    "balanceof",
+    "allowance",
+    "constructor",
+)
+
+COMPAT_ROUTINE_KEYWORDS: Tuple[str, ...] = (
+    "deposit",
+    "withdraw",
+    "transfer",
+    "mint",
+    "burn",
+)
+
 MECHANISM_HEAD_FEATURE_NAMES: Tuple[str, ...] = (
     "full_node_count_log",
     "full_edge_count_log",
@@ -164,6 +216,41 @@ def _utility_surface_score(file_path: str, function_names: str) -> float:
     fn_hits = sum(1 for token in UTILITY_FUNCTION_KEYWORDS if token in fn_text)
     fn_score = min(1.0, _safe_ratio(float(fn_hits), 3.0, default=0.0))
     return float(min(1.0, 0.75 * file_flag + 0.25 * fn_score))
+
+
+def _function_tokens(function_names: str) -> List[str]:
+    return [tok.lower() for tok in re.findall(r"[A-Za-z][A-Za-z0-9_]*", str(function_names or ""))]
+
+
+def _routine_bridge_surface_score(file_path: str, function_names: str) -> float:
+    base = Path(str(file_path or "")).name.lower()
+    tokens = _function_tokens(function_names)
+    if not tokens:
+        return 0.0
+    routine_hits = sum(1 for tok in tokens if any(key in tok for key in ROUTINE_BRIDGE_KEYWORDS))
+    auth_hits = sum(1 for tok in tokens if any(key in tok for key in ROUTINE_BRIDGE_AUTH_KEYWORDS))
+    file_flag = 1.0 if "bridge" in base else 0.0
+    routine_ratio = min(1.0, _safe_ratio(float(routine_hits), 6.0, default=0.0))
+    auth_penalty = min(1.0, _safe_ratio(float(auth_hits), 2.0, default=0.0))
+    score = 0.25 * file_flag + 0.75 * routine_ratio - 0.60 * auth_penalty
+    return float(min(1.0, max(0.0, score)))
+
+
+def _compat_wrapper_surface_score(file_path: str, function_names: str) -> float:
+    base = Path(str(file_path or "")).name.lower()
+    if not any(token in base for token in COMPAT_WRAPPER_FILE_PATTERNS):
+        return 0.0
+    tokens = _function_tokens(function_names)
+    if not tokens:
+        return 0.0
+    joined = "|".join(tokens)
+    if "totalsupply" in joined:
+        return 0.0
+    wrapper_hits = sum(1 for tok in tokens if any(key in tok for key in COMPAT_WRAPPER_KEYWORDS))
+    routine_hits = sum(1 for tok in tokens if any(key in tok for key in COMPAT_ROUTINE_KEYWORDS))
+    wrapper_ratio = min(1.0, _safe_ratio(float(wrapper_hits), 3.0, default=0.0))
+    routine_ratio = min(1.0, _safe_ratio(float(routine_hits), 5.0, default=0.0))
+    return float(min(1.0, 0.60 * wrapper_ratio + 0.40 * routine_ratio))
 
 
 def _line_candidates_from_graph(graph: Dict[str, Any]) -> List[int]:
@@ -426,6 +513,15 @@ class MechanismSliceHeadModel:
     utility_floor: float = 0.60
     utility_vp_weight: float = 0.40
     utility_margin_weight: float = 0.60
+    routine_bridge_scale: float = 0.55
+    routine_bridge_min_surface: float = 0.60
+    routine_bridge_max_vp: float = 0.18
+    routine_bridge_min_gate: float = 0.70
+    routine_bridge_max_utility: float = 0.25
+    compat_wrapper_scale: float = 0.60
+    compat_wrapper_min_surface: float = 0.70
+    compat_wrapper_max_vp: float = 0.18
+    compat_wrapper_min_utility: float = 0.75
     feature_names: List[str] = field(default_factory=lambda: list(MECHANISM_HEAD_FEATURE_NAMES))
     feature_index: Dict[str, int] = field(default_factory=dict)
     scaler: RobustScaler | None = None
@@ -691,8 +787,59 @@ class MechanismSliceHeadModel:
         ).astype(np.float32)
         utility_discount = np.clip(utility_discount, float(min(1.0, max(0.0, self.utility_floor))), 1.0).astype(np.float32)
 
+        routine_bridge_surface = np.asarray(
+            [
+                _routine_bridge_surface_score(
+                    str(row.get("file", row.get("relative_source_path", ""))),
+                    str(row.get("function_names", "")),
+                )
+                for row in feature_rows
+            ],
+            dtype=np.float32,
+        )
+        routine_bridge_mask = (
+            (routine_bridge_surface >= float(max(0.0, self.routine_bridge_min_surface)))
+            & (vp_evidence < float(max(0.0, self.routine_bridge_max_vp)))
+            & (bridge_gate > float(min(1.0, max(0.0, self.routine_bridge_min_gate))))
+            & (utility_surface < float(min(1.0, max(0.0, self.routine_bridge_max_utility))))
+        )
+        routine_bridge_discount = np.where(
+            routine_bridge_mask,
+            float(min(1.0, max(0.0, self.routine_bridge_scale))),
+            1.0,
+        ).astype(np.float32)
+
+        compat_wrapper_surface = np.asarray(
+            [
+                _compat_wrapper_surface_score(
+                    str(row.get("file", row.get("relative_source_path", ""))),
+                    str(row.get("function_names", "")),
+                )
+                for row in feature_rows
+            ],
+            dtype=np.float32,
+        )
+        compat_wrapper_mask = (
+            (compat_wrapper_surface >= float(max(0.0, self.compat_wrapper_min_surface)))
+            & (vp_evidence < float(max(0.0, self.compat_wrapper_max_vp)))
+            & (utility_surface >= float(min(1.0, max(0.0, self.compat_wrapper_min_utility))))
+        )
+        compat_wrapper_discount = np.where(
+            compat_wrapper_mask,
+            float(min(1.0, max(0.0, self.compat_wrapper_scale))),
+            1.0,
+        ).astype(np.float32)
+
         raw_score = 0.25 * residual_norm + 0.15 * if_norm + 0.20 * closure_norm + 0.40 * mechanism_norm
-        scaled_score = (0.10 + 0.90 * bridge_gate) * helper_discount * corroboration_factor * utility_discount * raw_score
+        scaled_score = (
+            (0.10 + 0.90 * bridge_gate)
+            * helper_discount
+            * corroboration_factor
+            * utility_discount
+            * routine_bridge_discount
+            * compat_wrapper_discount
+            * raw_score
+        )
         anomaly_score = (1.0 - np.exp(-np.clip(scaled_score, 0.0, 6.0))).astype(np.float32)
 
         out: List[Dict[str, Any]] = []
@@ -717,6 +864,10 @@ class MechanismSliceHeadModel:
                     "utility_surface": float(utility_surface[idx]),
                     "utility_corr": float(utility_corr[idx]),
                     "utility_discount": float(utility_discount[idx]),
+                    "routine_bridge_surface": float(routine_bridge_surface[idx]),
+                    "routine_bridge_discount": float(routine_bridge_discount[idx]),
+                    "compat_wrapper_surface": float(compat_wrapper_surface[idx]),
+                    "compat_wrapper_discount": float(compat_wrapper_discount[idx]),
                     "anomaly_score": float(anomaly_score[idx]),
                     "slice_pred": int(float(anomaly_score[idx]) >= float(self.slice_threshold)),
                 }
@@ -751,4 +902,22 @@ def load_mechanism_head_model(path: str | Path) -> MechanismSliceHeadModel:
         model.utility_vp_weight = 0.40
     if not hasattr(model, "utility_margin_weight"):
         model.utility_margin_weight = 0.60
+    if not hasattr(model, "routine_bridge_scale"):
+        model.routine_bridge_scale = 0.55
+    if not hasattr(model, "routine_bridge_min_surface"):
+        model.routine_bridge_min_surface = 0.60
+    if not hasattr(model, "routine_bridge_max_vp"):
+        model.routine_bridge_max_vp = 0.18
+    if not hasattr(model, "routine_bridge_min_gate"):
+        model.routine_bridge_min_gate = 0.70
+    if not hasattr(model, "routine_bridge_max_utility"):
+        model.routine_bridge_max_utility = 0.25
+    if not hasattr(model, "compat_wrapper_scale"):
+        model.compat_wrapper_scale = 0.60
+    if not hasattr(model, "compat_wrapper_min_surface"):
+        model.compat_wrapper_min_surface = 0.70
+    if not hasattr(model, "compat_wrapper_max_vp"):
+        model.compat_wrapper_max_vp = 0.18
+    if not hasattr(model, "compat_wrapper_min_utility"):
+        model.compat_wrapper_min_utility = 0.75
     return model
