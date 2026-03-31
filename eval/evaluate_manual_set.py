@@ -1697,6 +1697,17 @@ def apply_mechanism_head_score(
         dual_rows,
         max_hops=int(max(1, getattr(model, "max_hops", 6))),
     )
+    sid_to_aux = {
+        str(row.get("slice_id", "")): row
+        for row in rows
+        if str(row.get("slice_id", "")).strip()
+    }
+    for feature_row in feature_rows:
+        sid = str(feature_row.get("slice_id", ""))
+        aux = sid_to_aux.get(sid, {})
+        feature_row["proto_score"] = float(aux.get("proto_score", 0.0) or 0.0)
+        feature_row["view_score"] = float(aux.get("view_score", 0.0) or 0.0)
+        feature_row["boundary_margin"] = float(aux.get("boundary_margin", 0.0) or 0.0)
     scored_feature_rows = model.score_rows(feature_rows)
     sid_to_row = {str(row.get("slice_id", "")): row for row in scored_feature_rows if str(row.get("slice_id", "")).strip()}
     score = np.zeros((len(rows),), dtype=np.float32)
@@ -1714,6 +1725,10 @@ def apply_mechanism_head_score(
         row["mechanism_head_closure_norm"] = float(mrow.get("closure_norm", 0.0))
         row["mechanism_head_residual_norm"] = float(mrow.get("residual_norm", 0.0))
         row["mechanism_head_if_norm"] = float(mrow.get("if_norm", 0.0))
+        row["mechanism_head_vp_evidence"] = float(mrow.get("vp_evidence", 0.0))
+        row["mechanism_head_margin_sig"] = float(mrow.get("margin_sig", 0.0))
+        row["mechanism_head_corroboration"] = float(mrow.get("corroboration", 0.0))
+        row["mechanism_head_corroboration_factor"] = float(mrow.get("corroboration_factor", 0.0))
         row["mechanism_head_threshold"] = float(getattr(model, "slice_threshold", 0.5))
     diag = {
         "enabled": True,
@@ -1723,6 +1738,9 @@ def apply_mechanism_head_score(
         "feature_dim": int(len(getattr(model, "feature_names", []) or [])),
         "feature_names": list(getattr(model, "feature_names", []) or []),
         "slice_threshold": float(getattr(model, "slice_threshold", 0.5)),
+        "corroboration_alpha": float(getattr(model, "corroboration_alpha", 0.40)),
+        "corroboration_vp_weight": float(getattr(model, "corroboration_vp_weight", 0.80)),
+        "corroboration_margin_weight": float(getattr(model, "corroboration_margin_weight", 0.20)),
         "score_mean": float(np.mean(score)) if len(score) else 0.0,
         "score_std": float(np.std(score)) if len(score) else 0.0,
         "train_summary": dict(getattr(model, "train_summary", {}) or {}),
@@ -3875,6 +3893,10 @@ def main() -> None:
             "mechanism_head_closure_norm",
             "mechanism_head_residual_norm",
             "mechanism_head_if_norm",
+            "mechanism_head_vp_evidence",
+            "mechanism_head_margin_sig",
+            "mechanism_head_corroboration",
+            "mechanism_head_corroboration_factor",
             "mechanism_head_threshold",
             "final_risk",
             "status",
@@ -4084,6 +4106,10 @@ def main() -> None:
                 "mechanism_head_closure_norm",
                 "mechanism_head_residual_norm",
                 "mechanism_head_if_norm",
+                "mechanism_head_vp_evidence",
+                "mechanism_head_margin_sig",
+                "mechanism_head_corroboration",
+                "mechanism_head_corroboration_factor",
                 "mechanism_head_threshold",
                 "proto_resp_entropy",
                 "proto_resp_max",
@@ -4123,6 +4149,10 @@ def main() -> None:
                     "mechanism_head_closure_norm": float(row.get("mechanism_head_closure_norm", 0.0)),
                     "mechanism_head_residual_norm": float(row.get("mechanism_head_residual_norm", 0.0)),
                     "mechanism_head_if_norm": float(row.get("mechanism_head_if_norm", 0.0)),
+                    "mechanism_head_vp_evidence": float(row.get("mechanism_head_vp_evidence", 0.0)),
+                    "mechanism_head_margin_sig": float(row.get("mechanism_head_margin_sig", 0.0)),
+                    "mechanism_head_corroboration": float(row.get("mechanism_head_corroboration", 0.0)),
+                    "mechanism_head_corroboration_factor": float(row.get("mechanism_head_corroboration_factor", 0.0)),
                     "mechanism_head_threshold": float(row.get("mechanism_head_threshold", 0.0)),
                     "proto_resp_entropy": float(row.get("proto_resp_entropy", 0.0)),
                     "proto_resp_max": float(row.get("proto_resp_max", 0.0)),

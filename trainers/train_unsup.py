@@ -2424,8 +2424,22 @@ def main() -> None:
             for i, row in enumerate(out_rows):
                 row["gmm_head_score"] = float(gmm_score[i])
     if bool(getattr(args, "mechanism_head_enable", False)) and len(rows) > 0:
+        sid_to_aux = {
+            str(row.get("slice_id", "")): row
+            for row in out_rows
+            if str(row.get("slice_id", "")).strip()
+        }
+        mechanism_input_rows: List[Dict[str, Any]] = []
+        for row in rows:
+            sid = str(row.get("slice_id", ""))
+            merged = dict(row)
+            aux = sid_to_aux.get(sid, {})
+            merged["proto_score"] = float(aux.get("proto_score", 0.0) or 0.0)
+            merged["view_score"] = float(aux.get("view_score", 0.0) or 0.0)
+            merged["boundary_margin"] = float(aux.get("boundary_margin", 0.0) or 0.0)
+            mechanism_input_rows.append(merged)
         mechanism_feature_rows = extract_mechanism_head_feature_rows(
-            rows,
+            mechanism_input_rows,
             max_hops=int(max(1, getattr(args, "mechanism_head_max_hops", 6))),
         )
         mechanism_model = MechanismSliceHeadModel(
@@ -2450,6 +2464,10 @@ def main() -> None:
             row["mechanism_head_closure_norm"] = float(mrow.get("closure_norm", 0.0))
             row["mechanism_head_residual_norm"] = float(mrow.get("residual_norm", 0.0))
             row["mechanism_head_if_norm"] = float(mrow.get("if_norm", 0.0))
+            row["mechanism_head_vp_evidence"] = float(mrow.get("vp_evidence", 0.0))
+            row["mechanism_head_margin_sig"] = float(mrow.get("margin_sig", 0.0))
+            row["mechanism_head_corroboration"] = float(mrow.get("corroboration", 0.0))
+            row["mechanism_head_corroboration_factor"] = float(mrow.get("corroboration_factor", 0.0))
             row["mechanism_head_threshold"] = float(mechanism_model.slice_threshold)
             if bool(getattr(args, "mechanism_head_override_final_risk", False)):
                 row["legacy_final_risk"] = float(row.get("final_risk", 0.0))
@@ -2461,6 +2479,9 @@ def main() -> None:
             "feature_names": list(mechanism_model.feature_names),
             "slice_threshold": float(mechanism_model.slice_threshold),
             "override_final_risk": bool(getattr(args, "mechanism_head_override_final_risk", False)),
+            "corroboration_alpha": float(getattr(mechanism_model, "corroboration_alpha", 0.40)),
+            "corroboration_vp_weight": float(getattr(mechanism_model, "corroboration_vp_weight", 0.80)),
+            "corroboration_margin_weight": float(getattr(mechanism_model, "corroboration_margin_weight", 0.20)),
             "score_mean": float(np.mean(mechanism_head_score)) if len(mechanism_head_score) else 0.0,
             "score_std": float(np.std(mechanism_head_score)) if len(mechanism_head_score) else 0.0,
             **dict(mechanism_model.train_summary),
@@ -2557,6 +2578,10 @@ def main() -> None:
                 "mechanism_head_closure_norm",
                 "mechanism_head_residual_norm",
                 "mechanism_head_if_norm",
+                "mechanism_head_vp_evidence",
+                "mechanism_head_margin_sig",
+                "mechanism_head_corroboration",
+                "mechanism_head_corroboration_factor",
                 "mechanism_head_threshold",
                 "energy_head_score",
                 "gmm_head_score",

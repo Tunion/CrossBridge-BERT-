@@ -308,6 +308,9 @@ def extract_mechanism_head_feature_row(
         "file": _normalize_path(_row_file_key(dual_row)),
         "function_names": "|".join(_function_name_list(dual_row.get("function_names", []))),
         "line_candidates": "|".join(str(x) for x in line_candidates),
+        "proto_score": float(dual_row.get("proto_score", 0.0) or 0.0),
+        "view_score": float(dual_row.get("view_score", 0.0) or 0.0),
+        "boundary_margin": float(dual_row.get("boundary_margin", 0.0) or 0.0),
         "full_node_count_log": _log1p(float(len(full_nodes))),
         "full_edge_count_log": _log1p(float(len(full_edges))),
         "skeleton_node_ratio": min(1.0, _safe_ratio(float(len(skel_nodes)), float(n_full), default=0.0)),
@@ -388,6 +391,9 @@ class MechanismSliceHeadModel:
     function_quantile: float = 0.95
     threshold_std_factor: float = 1.05
     threshold_mad_factor: float = 1.50
+    corroboration_alpha: float = 0.40
+    corroboration_vp_weight: float = 0.80
+    corroboration_margin_weight: float = 0.20
     feature_names: List[str] = field(default_factory=lambda: list(MECHANISM_HEAD_FEATURE_NAMES))
     feature_index: Dict[str, int] = field(default_factory=dict)
     scaler: RobustScaler | None = None
@@ -408,6 +414,9 @@ class MechanismSliceHeadModel:
 
     def _col(self, x: np.ndarray, name: str) -> np.ndarray:
         return x[:, self.feature_index[name]]
+
+    def _aux_col(self, feature_rows: Sequence[Dict[str, Any]], name: str) -> np.ndarray:
+        return np.asarray([float(row.get(name, 0.0) or 0.0) for row in feature_rows], dtype=np.float32)
 
     def _closure_inconsistency(self, x: np.ndarray) -> np.ndarray:
         role_presence = self._col(x, "role_presence_ratio")
@@ -614,8 +623,22 @@ class MechanismSliceHeadModel:
         helper_excess = np.maximum(0.0, helper_pollution - bridge_intent)
         helper_discount = np.clip(1.0 - 0.45 * helper_excess, 0.55, 1.0).astype(np.float32)
 
+        vp_evidence = np.maximum(
+            self._aux_col(feature_rows, "proto_score"),
+            self._aux_col(feature_rows, "view_score"),
+        )
+        margin_sig = 1.0 / (1.0 + np.exp(-self._aux_col(feature_rows, "boundary_margin")))
+        vp_w = float(min(1.0, max(0.0, self.corroboration_vp_weight)))
+        margin_w = float(min(1.0, max(0.0, self.corroboration_margin_weight)))
+        weight_sum = max(1e-6, vp_w + margin_w)
+        corroboration = np.clip((vp_w * vp_evidence + margin_w * margin_sig) / weight_sum, 0.0, 1.0).astype(np.float32)
+        corroboration_factor = (
+            float(min(1.0, max(0.0, self.corroboration_alpha)))
+            + (1.0 - float(min(1.0, max(0.0, self.corroboration_alpha)))) * corroboration
+        )
+
         raw_score = 0.25 * residual_norm + 0.15 * if_norm + 0.20 * closure_norm + 0.40 * mechanism_norm
-        scaled_score = (0.10 + 0.90 * bridge_gate) * helper_discount * raw_score
+        scaled_score = (0.10 + 0.90 * bridge_gate) * helper_discount * corroboration_factor * raw_score
         anomaly_score = (1.0 - np.exp(-np.clip(scaled_score, 0.0, 6.0))).astype(np.float32)
 
         out: List[Dict[str, Any]] = []
@@ -633,6 +656,10 @@ class MechanismSliceHeadModel:
                     "mechanism_raw": float(mechanism_raw[idx]),
                     "mechanism_norm": float(mechanism_norm[idx]),
                     "helper_discount": float(helper_discount[idx]),
+                    "vp_evidence": float(vp_evidence[idx]),
+                    "margin_sig": float(margin_sig[idx]),
+                    "corroboration": float(corroboration[idx]),
+                    "corroboration_factor": float(corroboration_factor[idx]),
                     "anomaly_score": float(anomaly_score[idx]),
                     "slice_pred": int(float(anomaly_score[idx]) >= float(self.slice_threshold)),
                 }
@@ -653,4 +680,12 @@ def load_mechanism_head_model(path: str | Path) -> MechanismSliceHeadModel:
         model = pickle.load(f)
     if not isinstance(model, MechanismSliceHeadModel):
         raise TypeError(f"Unexpected mechanism head model type: {type(model)!r}")
+    if not getattr(model, "feature_index", None):
+        model.feature_index = {name: idx for idx, name in enumerate(model.feature_names)}
+    if not hasattr(model, "corroboration_alpha"):
+        model.corroboration_alpha = 0.40
+    if not hasattr(model, "corroboration_vp_weight"):
+        model.corroboration_vp_weight = 0.80
+    if not hasattr(model, "corroboration_margin_weight"):
+        model.corroboration_margin_weight = 0.20
     return model
