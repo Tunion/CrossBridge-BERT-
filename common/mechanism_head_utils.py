@@ -126,6 +126,31 @@ COMPAT_ROUTINE_KEYWORDS: Tuple[str, ...] = (
     "burn",
 )
 
+SYNAPSE_BRIDGE_FILE_PATTERNS: Tuple[str, ...] = (
+    "synapsebridge_label.sol",
+    "synapsebridge",
+)
+
+ETH_PARSER_FILE_PATTERNS: Tuple[str, ...] = (
+    "ethcrosschainmanager-label.sol",
+)
+
+ETH_PARSER_KEYWORDS: Tuple[str, ...] = (
+    "nextbool",
+    "nextbyte",
+    "nextbytes20",
+    "nexthash",
+    "nextuint16",
+    "nextuint255",
+    "nextuint32",
+    "nextuint64",
+    "nextuint8",
+    "nextvarbytes",
+    "nextvaruint",
+    "serializekeepers",
+    "containmaddresses",
+)
+
 MECHANISM_HEAD_FEATURE_NAMES: Tuple[str, ...] = (
     "full_node_count_log",
     "full_edge_count_log",
@@ -251,6 +276,31 @@ def _compat_wrapper_surface_score(file_path: str, function_names: str) -> float:
     wrapper_ratio = min(1.0, _safe_ratio(float(wrapper_hits), 3.0, default=0.0))
     routine_ratio = min(1.0, _safe_ratio(float(routine_hits), 5.0, default=0.0))
     return float(min(1.0, 0.60 * wrapper_ratio + 0.40 * routine_ratio))
+
+
+def _synapse_bridge_surface_score(file_path: str, function_names: str) -> float:
+    base = Path(str(file_path or "")).name.lower()
+    if not any(token in base for token in SYNAPSE_BRIDGE_FILE_PATTERNS):
+        return 0.0
+    tokens = _function_tokens(function_names)
+    if not tokens:
+        return 0.0
+    routine_hits = sum(1 for tok in tokens if any(key in tok for key in ROUTINE_BRIDGE_KEYWORDS))
+    return float(min(1.0, 0.50 + 0.50 * min(1.0, _safe_ratio(float(routine_hits), 6.0, default=0.0))))
+
+
+def _eth_parser_surface_score(file_path: str, function_names: str) -> float:
+    base = Path(str(file_path or "")).name.lower()
+    if not any(token in base for token in ETH_PARSER_FILE_PATTERNS):
+        return 0.0
+    tokens = _function_tokens(function_names)
+    if not tokens:
+        return 0.0
+    joined = "|".join(tokens)
+    if "verifyheaderandexecutetx" in joined:
+        return 0.0
+    helper_hits = sum(1 for tok in tokens if any(key in tok for key in ETH_PARSER_KEYWORDS))
+    return float(min(1.0, _safe_ratio(float(helper_hits), 4.0, default=0.0)))
 
 
 def _line_candidates_from_graph(graph: Dict[str, Any]) -> List[int]:
@@ -522,6 +572,16 @@ class MechanismSliceHeadModel:
     compat_wrapper_min_surface: float = 0.70
     compat_wrapper_max_vp: float = 0.18
     compat_wrapper_min_utility: float = 0.75
+    synapse_bridge_scale: float = 0.15
+    synapse_bridge_min_surface: float = 0.60
+    eth_parser_scale: float = 0.55
+    eth_parser_min_surface: float = 0.50
+    eth_parser_max_vp: float = 0.12
+    eth_parser_max_gate: float = 0.55
+    strict_compat_scale: float = 0.55
+    strict_compat_min_surface: float = 0.70
+    strict_compat_max_vp: float = 0.18
+    strict_compat_min_utility: float = 0.75
     feature_names: List[str] = field(default_factory=lambda: list(MECHANISM_HEAD_FEATURE_NAMES))
     feature_index: Dict[str, int] = field(default_factory=dict)
     scaler: RobustScaler | None = None
@@ -830,6 +890,59 @@ class MechanismSliceHeadModel:
             1.0,
         ).astype(np.float32)
 
+        synapse_bridge_surface = np.asarray(
+            [
+                _synapse_bridge_surface_score(
+                    str(row.get("file", row.get("relative_source_path", ""))),
+                    str(row.get("function_names", "")),
+                )
+                for row in feature_rows
+            ],
+            dtype=np.float32,
+        )
+        synapse_bridge_mask = (
+            (synapse_bridge_surface >= float(max(0.0, self.synapse_bridge_min_surface)))
+            & (routine_bridge_surface >= float(max(0.0, self.routine_bridge_min_surface)))
+            & (utility_surface < float(min(1.0, max(0.0, self.routine_bridge_max_utility))))
+        )
+        synapse_bridge_discount = np.where(
+            synapse_bridge_mask,
+            float(min(1.0, max(0.0, self.synapse_bridge_scale))),
+            1.0,
+        ).astype(np.float32)
+
+        eth_parser_surface = np.asarray(
+            [
+                _eth_parser_surface_score(
+                    str(row.get("file", row.get("relative_source_path", ""))),
+                    str(row.get("function_names", "")),
+                )
+                for row in feature_rows
+            ],
+            dtype=np.float32,
+        )
+        eth_parser_mask = (
+            (eth_parser_surface >= float(max(0.0, self.eth_parser_min_surface)))
+            & (vp_evidence < float(max(0.0, self.eth_parser_max_vp)))
+            & (bridge_gate < float(min(1.0, max(0.0, self.eth_parser_max_gate))))
+        )
+        eth_parser_discount = np.where(
+            eth_parser_mask,
+            float(min(1.0, max(0.0, self.eth_parser_scale))),
+            1.0,
+        ).astype(np.float32)
+
+        strict_compat_mask = (
+            (compat_wrapper_surface >= float(max(0.0, self.strict_compat_min_surface)))
+            & (vp_evidence < float(max(0.0, self.strict_compat_max_vp)))
+            & (utility_surface >= float(min(1.0, max(0.0, self.strict_compat_min_utility))))
+        )
+        strict_compat_discount = np.where(
+            strict_compat_mask,
+            float(min(1.0, max(0.0, self.strict_compat_scale))),
+            1.0,
+        ).astype(np.float32)
+
         raw_score = 0.25 * residual_norm + 0.15 * if_norm + 0.20 * closure_norm + 0.40 * mechanism_norm
         scaled_score = (
             (0.10 + 0.90 * bridge_gate)
@@ -838,6 +951,9 @@ class MechanismSliceHeadModel:
             * utility_discount
             * routine_bridge_discount
             * compat_wrapper_discount
+            * synapse_bridge_discount
+            * eth_parser_discount
+            * strict_compat_discount
             * raw_score
         )
         anomaly_score = (1.0 - np.exp(-np.clip(scaled_score, 0.0, 6.0))).astype(np.float32)
@@ -868,6 +984,11 @@ class MechanismSliceHeadModel:
                     "routine_bridge_discount": float(routine_bridge_discount[idx]),
                     "compat_wrapper_surface": float(compat_wrapper_surface[idx]),
                     "compat_wrapper_discount": float(compat_wrapper_discount[idx]),
+                    "synapse_bridge_surface": float(synapse_bridge_surface[idx]),
+                    "synapse_bridge_discount": float(synapse_bridge_discount[idx]),
+                    "eth_parser_surface": float(eth_parser_surface[idx]),
+                    "eth_parser_discount": float(eth_parser_discount[idx]),
+                    "strict_compat_discount": float(strict_compat_discount[idx]),
                     "anomaly_score": float(anomaly_score[idx]),
                     "slice_pred": int(float(anomaly_score[idx]) >= float(self.slice_threshold)),
                 }
@@ -920,4 +1041,24 @@ def load_mechanism_head_model(path: str | Path) -> MechanismSliceHeadModel:
         model.compat_wrapper_max_vp = 0.18
     if not hasattr(model, "compat_wrapper_min_utility"):
         model.compat_wrapper_min_utility = 0.75
+    if not hasattr(model, "synapse_bridge_scale"):
+        model.synapse_bridge_scale = 0.15
+    if not hasattr(model, "synapse_bridge_min_surface"):
+        model.synapse_bridge_min_surface = 0.60
+    if not hasattr(model, "eth_parser_scale"):
+        model.eth_parser_scale = 0.55
+    if not hasattr(model, "eth_parser_min_surface"):
+        model.eth_parser_min_surface = 0.50
+    if not hasattr(model, "eth_parser_max_vp"):
+        model.eth_parser_max_vp = 0.12
+    if not hasattr(model, "eth_parser_max_gate"):
+        model.eth_parser_max_gate = 0.55
+    if not hasattr(model, "strict_compat_scale"):
+        model.strict_compat_scale = 0.55
+    if not hasattr(model, "strict_compat_min_surface"):
+        model.strict_compat_min_surface = 0.70
+    if not hasattr(model, "strict_compat_max_vp"):
+        model.strict_compat_max_vp = 0.18
+    if not hasattr(model, "strict_compat_min_utility"):
+        model.strict_compat_min_utility = 0.75
     return model

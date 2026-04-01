@@ -2475,6 +2475,11 @@ def main() -> None:
             row["mechanism_head_routine_bridge_discount"] = float(mrow.get("routine_bridge_discount", 1.0))
             row["mechanism_head_compat_wrapper_surface"] = float(mrow.get("compat_wrapper_surface", 0.0))
             row["mechanism_head_compat_wrapper_discount"] = float(mrow.get("compat_wrapper_discount", 1.0))
+            row["mechanism_head_synapse_bridge_surface"] = float(mrow.get("synapse_bridge_surface", 0.0))
+            row["mechanism_head_synapse_bridge_discount"] = float(mrow.get("synapse_bridge_discount", 1.0))
+            row["mechanism_head_eth_parser_surface"] = float(mrow.get("eth_parser_surface", 0.0))
+            row["mechanism_head_eth_parser_discount"] = float(mrow.get("eth_parser_discount", 1.0))
+            row["mechanism_head_strict_compat_discount"] = float(mrow.get("strict_compat_discount", 1.0))
             row["mechanism_head_threshold"] = float(mechanism_model.slice_threshold)
             if bool(getattr(args, "mechanism_head_override_final_risk", False)):
                 row["legacy_final_risk"] = float(row.get("final_risk", 0.0))
@@ -2501,6 +2506,16 @@ def main() -> None:
             "compat_wrapper_min_surface": float(getattr(mechanism_model, "compat_wrapper_min_surface", 0.70)),
             "compat_wrapper_max_vp": float(getattr(mechanism_model, "compat_wrapper_max_vp", 0.18)),
             "compat_wrapper_min_utility": float(getattr(mechanism_model, "compat_wrapper_min_utility", 0.75)),
+            "synapse_bridge_scale": float(getattr(mechanism_model, "synapse_bridge_scale", 0.15)),
+            "synapse_bridge_min_surface": float(getattr(mechanism_model, "synapse_bridge_min_surface", 0.60)),
+            "eth_parser_scale": float(getattr(mechanism_model, "eth_parser_scale", 0.55)),
+            "eth_parser_min_surface": float(getattr(mechanism_model, "eth_parser_min_surface", 0.50)),
+            "eth_parser_max_vp": float(getattr(mechanism_model, "eth_parser_max_vp", 0.12)),
+            "eth_parser_max_gate": float(getattr(mechanism_model, "eth_parser_max_gate", 0.55)),
+            "strict_compat_scale": float(getattr(mechanism_model, "strict_compat_scale", 0.55)),
+            "strict_compat_min_surface": float(getattr(mechanism_model, "strict_compat_min_surface", 0.70)),
+            "strict_compat_max_vp": float(getattr(mechanism_model, "strict_compat_max_vp", 0.18)),
+            "strict_compat_min_utility": float(getattr(mechanism_model, "strict_compat_min_utility", 0.75)),
             "score_mean": float(np.mean(mechanism_head_score)) if len(mechanism_head_score) else 0.0,
             "score_std": float(np.std(mechanism_head_score)) if len(mechanism_head_score) else 0.0,
             **dict(mechanism_model.train_summary),
@@ -2608,6 +2623,11 @@ def main() -> None:
                 "mechanism_head_routine_bridge_discount",
                 "mechanism_head_compat_wrapper_surface",
                 "mechanism_head_compat_wrapper_discount",
+                "mechanism_head_synapse_bridge_surface",
+                "mechanism_head_synapse_bridge_discount",
+                "mechanism_head_eth_parser_surface",
+                "mechanism_head_eth_parser_discount",
+                "mechanism_head_strict_compat_discount",
                 "mechanism_head_threshold",
                 "energy_head_score",
                 "gmm_head_score",
